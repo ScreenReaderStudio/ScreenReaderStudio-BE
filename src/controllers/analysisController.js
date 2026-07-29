@@ -1,20 +1,66 @@
 import { analyzeAccessibility } from '../services/analysis/index.js';
+import {
+  AnalysisCancelledError,
+  AnalysisError,
+  InvalidAnalysisTargetError,
+} from '../services/analysis/errors.js';
 import { saveAnalysis, getAnalysisById } from '../services/analysisService.js';
 
 export const performAnalysis = async (req, res) => {
+  const abortController = new AbortController();
+  const abortAnalysis = () => {
+    if (!res.writableEnded) {
+      abortController.abort(new AnalysisCancelledError());
+    }
+  };
+
+  req.once('aborted', abortAnalysis);
+  res.once('close', abortAnalysis);
+
   try {
     const { url, htmlContent, screenReader } = req.body;
 
-    if (!url && !htmlContent) {
-      return res.status(400).json({ message: '분석할 URL 또는 HTML 콘텐츠를 제공해야 합니다.' });
+    if (Boolean(url) === Boolean(htmlContent)) {
+      throw new InvalidAnalysisTargetError('분석할 URL과 HTML 콘텐츠 중 하나만 제공해야 합니다.', {
+        code: 'INVALID_REQUEST',
+      });
     }
 
-    const results = await analyzeAccessibility({ url, htmlContent, screenReader });
+    if (!['voiceover', 'nvda'].includes(screenReader)) {
+      throw new InvalidAnalysisTargetError('지원하지 않는 스크린 리더입니다.', {
+        code: 'INVALID_REQUEST',
+      });
+    }
+
+    const results = await analyzeAccessibility(
+      { url, htmlContent, screenReader },
+      { signal: abortController.signal }
+    );
 
     res.status(200).json(results);
   } catch (error) {
-    console.error('분석 요청 처리 중 에러 발생:', error);
-    res.status(500).json({ message: error.message || '서버 내부 오류가 발생했습니다.' });
+    if (!(error instanceof AnalysisError && error.status < 500)) {
+      console.error('분석 요청 처리 중 에러 발생:', error);
+    }
+
+    if (res.headersSent || res.writableEnded || abortController.signal.aborted) {
+      return;
+    }
+
+    if (error instanceof AnalysisError) {
+      return res.status(error.status).json({
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      code: 'INTERNAL_ERROR',
+      message: '서버 내부 오류가 발생했습니다.',
+    });
+  } finally {
+    req.removeListener('aborted', abortAnalysis);
+    res.removeListener('close', abortAnalysis);
   }
 };
 

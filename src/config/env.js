@@ -16,10 +16,10 @@ export function loadEnv() {
   const envFile = nodeEnv === 'production' ? '.env.production' : '.env.development';
   const envPath = join(__dirname, '..', '..', envFile);
 
-  const result = dotenv.config({ path: envPath });
+  const result = dotenv.config({ path: envPath, quiet: true });
 
   if (result.error || !process.env.SUPABASE_URL) {
-    dotenv.config({ path: join(__dirname, '..', '..', '.env') });
+    dotenv.config({ path: join(__dirname, '..', '..', '.env'), quiet: true });
   }
 
   isLoaded = true;

@@ -6,9 +6,11 @@
   "scripts": {
     "postinstall": "npx puppeteer browsers install",
     "dev": "NODE_ENV=development node src/index.js",
+    "lint": "eslint .",
     "start": "NODE_ENV=production node src/index.js",
     "start:dev": "NODE_ENV=development node src/index.js",
     "start:prod": "NODE_ENV=production node src/index.js",
+    "test": "node --test --test-isolation=none",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -25,6 +27,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.0.1",
     "express": "^5.1.0",
+    "ipaddr.js": "^2.4.0",
     "jsonwebtoken": "^9.0.2",
     "puppeteer": "^24.12.0"
   },
