@@ -3,34 +3,33 @@ import './config/env.js';
 const nodeEnv = process.env.NODE_ENV || 'development';
 console.log(`환경: ${nodeEnv}`);
 
-import cors from 'cors';
-import express from 'express';
-import cookieParser from 'cookie-parser';
-import { authenticateToken } from './middleware/authMiddleware.js';
-import authRouter from './routes/auth.js';
-import analysisRouter from './routes/analysis.js';
-
-const app = express();
-
-app.use(
-  cors({
-    origin: (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, ''),
-    credentials: true,
-  })
-);
-app.use(express.json({ limit: '10mb' }));
-app.use(cookieParser());
-
-app.use('/api/auth', authRouter);
-app.use('/api/analysis', analysisRouter);
-
-app.get('/api/users/me', authenticateToken, (req, res) => {
-  res.status(200).json({ userId: req.userId });
-});
+const { createApp } = await import('./app.js');
+const { createAnalysisWorker } = await import('./services/analysisJobs/worker.js');
+const app = createApp();
+const worker = createAnalysisWorker();
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${nodeEnv}`);
   console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+  worker.start();
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
+  console.log(`${signal} 신호를 받아 서버를 종료합니다.`);
+  const serverClosed = new Promise((resolve) => {
+    server.close(resolve);
+  });
+  await Promise.all([serverClosed, worker.stop()]);
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));

@@ -82,6 +82,26 @@
 
 ![Vercel](https://img.shields.io/badge/vercel-000000?style=for-the-badge&logo=vercel&logoColor=white) ![Railway](https://img.shields.io/badge/railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)
 
+## 비동기 분석 작업 운영
+
+배포 전에 `supabase/migrations`의 SQL migration을 Supabase에 적용해야 합니다. API 서버는
+시작할 때 동일 프로세스에서 분석 worker를 실행하며 Supabase lease로 중복 실행을 방지합니다.
+
+다음 환경 변수는 선택 사항이며 괄호 안의 기본값을 사용합니다.
+
+- `ANALYSIS_JOB_POLL_AFTER_MS` (`2000`)
+- `ANALYSIS_JOB_WORKER_POLL_MS` (`1000`)
+- `ANALYSIS_JOB_LEASE_SECONDS` (`30`)
+- `ANALYSIS_JOB_HEARTBEAT_MS` (`10000`)
+- `ANALYSIS_JOB_RETENTION_HOURS` (`24`)
+- `ANALYSIS_JOB_MAX_QUEUED` (`50`)
+- `ANALYSIS_JOB_MAX_ATTEMPTS` (`2`)
+- `ANALYSIS_JOB_GLOBAL_CONCURRENCY` (`1`)
+- `ANALYSIS_JOB_WORKER_CONCURRENCY` (`1`)
+
+`ANALYSIS_JOB_HEARTBEAT_MS`는 lease 시간보다 충분히 짧아야 합니다. 웹 인스턴스를 늘리더라도
+전체 Chromium 동시 실행 수는 DB claim 함수와 `ANALYSIS_JOB_GLOBAL_CONCURRENCY`로 제한됩니다.
+
 # **🔥 Motivation**
 
 토스의 기술 블로그 게시글 중

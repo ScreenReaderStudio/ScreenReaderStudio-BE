@@ -6,6 +6,7 @@ export const saveAnalysis = async ({
   accessibilityAnalysis,
   screenReaderScript,
   selectedScreenReader,
+  sourceJobId,
 }) => {
   if (!userId || typeof userId !== 'string') {
     throw new Error('유효하지 않은 사용자 ID입니다.');
@@ -27,6 +28,23 @@ export const saveAnalysis = async ({
     throw new Error('selectedScreenReader는 문자열이어야 합니다.');
   }
 
+  if (sourceJobId) {
+    const { data: existing, error: findError } = await supabase
+      .from('analyses')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('source_job_id', sourceJobId)
+      .maybeSingle();
+
+    if (findError) {
+      throw new Error('기존 공유 분석 결과 조회에 실패했습니다.', { cause: findError });
+    }
+
+    if (existing) {
+      return existing.id;
+    }
+  }
+
   const { data, error } = await supabase
     .from('analyses')
     .insert([
@@ -36,12 +54,26 @@ export const saveAnalysis = async ({
         accessibility_analysis: accessibilityAnalysis,
         screen_reader_script: screenReaderScript,
         selected_screen_reader: selectedScreenReader,
+        ...(sourceJobId ? { source_job_id: sourceJobId } : {}),
       },
     ])
     .select('id')
     .single();
 
   if (error) {
+    if (sourceJobId && error.code === '23505') {
+      const { data: existing } = await supabase
+        .from('analyses')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('source_job_id', sourceJobId)
+        .single();
+
+      if (existing) {
+        return existing.id;
+      }
+    }
+
     console.error('Error saving analysis:', error);
     throw new Error('데이터베이스 오류로 분석 결과 저장에 실패했습니다.');
   }

@@ -5,6 +5,7 @@ import {
   InvalidAnalysisTargetError,
 } from '../services/analysis/errors.js';
 import { saveAnalysis, getAnalysisById } from '../services/analysisService.js';
+import { getJob } from '../services/analysisJobs/repository.js';
 
 export const performAnalysis = async (req, res) => {
   const abortController = new AbortController();
@@ -66,12 +67,33 @@ export const performAnalysis = async (req, res) => {
 
 export const saveAnalysisResult = async (req, res) => {
   try {
-    const { pageContent, accessibilityAnalysis, screenReaderScript, selectedScreenReader } =
-      req.body;
+    let { pageContent, accessibilityAnalysis, screenReaderScript, selectedScreenReader } = req.body;
     const userId = req.userId;
+    const sourceJobId = req.body.jobId;
 
     if (!userId) {
       return res.status(401).json({ message: '인증되지 않은 사용자입니다.' });
+    }
+
+    if (sourceJobId) {
+      const accessToken = req.get('X-Analysis-Job-Token') ?? '';
+      const job = await getJob(sourceJobId, accessToken);
+
+      if (!job) {
+        return res
+          .status(404)
+          .json({ code: 'JOB_NOT_FOUND', message: '분석 작업을 찾을 수 없습니다.' });
+      }
+
+      if (job.status !== 'succeeded' || !job.result) {
+        return res
+          .status(409)
+          .json({ code: 'JOB_NOT_READY', message: '분석 결과가 아직 준비되지 않았습니다.' });
+      }
+
+      ({ pageContent, accessibilityAnalysis, screenReaderScript } = job.result);
+      selectedScreenReader =
+        job.result.selectedScreenReader ?? job.screen_reader ?? req.body.selectedScreenReader;
     }
 
     if (!pageContent || typeof pageContent !== 'string' || pageContent.trim().length === 0) {
@@ -116,6 +138,7 @@ export const saveAnalysisResult = async (req, res) => {
       accessibilityAnalysis,
       screenReaderScript,
       selectedScreenReader,
+      sourceJobId,
     });
 
     res.status(201).json({ id: analysisId, message: '분석 결과가 성공적으로 저장되었습니다.' });

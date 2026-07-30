@@ -141,6 +141,7 @@ export const analyzeAccessibility = async (
     loadContent = loadPageContent,
     analyze = analyzePage,
     networkOptions,
+    onProgress = async () => {},
   } = {}
 ) => {
   let browser;
@@ -179,6 +180,7 @@ export const analyzeAccessibility = async (
       hasWarnedAboutDisabledSandbox = true;
     }
 
+    await onProgress('launching_browser');
     const browserLaunch = browserLauncher.launch(createBrowserLaunchOptions());
     browserLaunch
       .then((launchedBrowser) => {
@@ -209,14 +211,17 @@ export const analyzeAccessibility = async (
     });
 
     networkPolicy = await installNetworkPolicy(page, networkOptions);
+    await onProgress('loading_page');
     const rawContent = await runWithSignal(
       loadContent(page, { url, htmlContent }, { signal, networkPolicy, networkOptions }),
       signal
     );
+    await onProgress('analyzing_accessibility');
     const { screenReaderScript, accessibilityAnalysis } = await runWithSignal(
       analyze(page, screenReader),
       signal
     );
+    await onProgress('preparing_result');
     const pageContentWithHighlighter = injectHighlighterScript(rawContent);
 
     return {
